@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frontend Heuristic Audit Tool</title>
+<style>
+  :root {
+    --bg: #0f0f11;
+    --bg2: #17171a;
+    --bg3: #1e1e23;
+    --bg4: #25252c;
+    --border: #2e2e38;
+    --border2: #3a3a48;
+    --text: #e8e8f0;
+    --text2: #9898ac;
+    --text3: #606070;
+    --accent: #5b6fff;
+    --accent2: #7b8fff;
+    --accent-bg: rgba(91,111,255,0.12);
+    --critical: #ff4f4f;
+    --critical-bg: rgba(255,79,79,0.1);
+    --high: #ff8c00;
+    --high-bg: rgba(255,140,0,0.1);
+    --med: #f5c518;
+    --med-bg: rgba(245,197,24,0.1);
+    --low: #22c55e;
+    --low-bg: rgba(34,197,94,0.1);
+    --success: #22c55e;
+    --danger: #ff4f4f;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+  #app { display: flex; height: 100vh; overflow: hidden; }
+
+  #sidebar { width: 250px; min-width: 250px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  .sidebar-brand { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-brand .logo { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.06em; text-transform: uppercase; }
+  .sidebar-brand .version { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .sidebar-client { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg3); }
+  .sidebar-client-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+  .sidebar-client-name { font-size: 13px; font-weight: 500; color: var(--text); margin-top: 2px; }
+
+  .sidebar-section-label { padding: 14px 16px 6px; font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer; color: var(--text2); font-size: 13px; border: none; background: none; width: 100%; text-align: left; transition: all 0.15s; position: relative; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--accent-bg); color: var(--accent2); }
+  .nav-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+  .nav-item .nav-icon { font-size: 14px; opacity: 0.7; min-width: 16px; }
+  .nav-badge { margin-left: auto; font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--accent-bg); color: var(--accent2); font-weight: 500; }
+  .nav-badge.warn { background: var(--high-bg); color: var(--high); }
+  .nav-badge.good { background: var(--low-bg); color: var(--low); }
+  .nav-badge.danger { background: var(--critical-bg); color: var(--critical); }
+
+  #main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .page-header { padding: 22px 32px 18px; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 10; }
+  .page-header h1 { font-size: 18px; font-weight: 500; }
+  .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; }
+  .page-content { padding: 26px 32px 60px; flex: 1; }
+
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .card-sub { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+
+  .stat-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-value { font-size: 24px; font-weight: 500; margin-top: 4px; }
+  .stat-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .stat-value.red { color: var(--critical); }
+  .stat-value.orange { color: var(--high); }
+  .stat-value.yellow { color: var(--med); }
+  .stat-value.green { color: var(--success); }
+
+  .form-group { margin-bottom: 14px; }
+  .form-label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+  .form-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  input[type="text"], input[type="date"], input[type="url"], textarea, select {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); font-family: var(--font); font-size: 13px; padding: 9px 12px; outline: none; transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 60px; }
+  select option { background: var(--bg3); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; font-family: var(--font); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+  .btn-danger { background: var(--critical-bg); color: var(--critical); border: 1px solid rgba(255,79,79,0.2); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .score-row { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .score-row:last-child { border-bottom: none; }
+  .score-question { flex: 1; font-size: 13px; color: var(--text); }
+  .score-hint { font-size: 11px; color: var(--text3); margin-top: 4px; line-height: 1.5; }
+  .score-principle { display: inline-block; margin-top: 6px; font-size: 10px; color: var(--accent2); background: var(--accent-bg); padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .score-buttons { display: flex; gap: 4px; flex-shrink: 0; }
+  .score-btn { width: 64px; height: 36px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg3); color: var(--text3); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; text-transform: uppercase; letter-spacing: 0.03em; }
+  .score-btn:hover { border-color: var(--border2); color: var(--text); }
+  .score-btn.selected-0 { background: var(--critical-bg); border-color: var(--critical); color: var(--critical); }
+  .score-btn.selected-1 { background: var(--med-bg); border-color: var(--med); color: var(--med); }
+  .score-btn.selected-2 { background: var(--low-bg); border-color: var(--success); color: var(--success); }
+  .evidence-input { margin-top: 10px; }
+  .score-item-wrap { padding: 0 0 4px; }
+
+  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge-high { background: var(--critical-bg); color: var(--critical); }
+  .badge-medium { background: var(--high-bg); color: var(--high); }
+  .badge-low { background: var(--low-bg); color: var(--low); }
+
+  .finding-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden; }
+  .finding-header { padding: 14px 18px; display: flex; align-items: center; gap: 10px; cursor: pointer; background: var(--bg3); border-bottom: 1px solid var(--border); }
+  .finding-header:hover { background: var(--bg4); }
+  .finding-num { font-size: 11px; color: var(--text3); font-family: var(--mono); min-width: 36px; }
+  .finding-title { flex: 1; font-size: 13px; font-weight: 500; }
+  .finding-meta { font-size: 11px; color: var(--text3); display: flex; gap: 10px; align-items: center; }
+  .finding-body { padding: 18px; display: none; }
+  .finding-body.open { display: block; }
+  .finding-field { margin-bottom: 12px; }
+  .finding-field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 5px; display: block; }
+
+  .progress-bar { height: 7px; background: var(--bg4); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+  .score-ring { width: 90px; height: 90px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-direction: column; border: 4px solid var(--border); position: relative; }
+  .score-ring .score-big { font-size: 22px; font-weight: 600; }
+  .score-ring .score-max { font-size: 10px; color: var(--text3); }
+
+  .cat-bar-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+  .cat-bar-label { width: 150px; font-size: 12px; color: var(--text2); flex-shrink: 0; }
+  .cat-bar-track { flex: 1; height: 8px; background: var(--bg4); border-radius: 4px; overflow: hidden; }
+  .cat-bar-fill { height: 100%; border-radius: 4px; }
+  .cat-bar-val { width: 50px; text-align: right; font-size: 12px; color: var(--text3); font-family: var(--mono); flex-shrink: 0; }
+
+  .walk-row { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  .walk-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+
+  .checklist-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .checklist-row:last-child { border-bottom: none; }
+  .check-box { width: 18px; height: 18px; border: 1px solid var(--border2); border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+  .check-box.done { background: var(--success); border-color: var(--success); color: #06120a; font-size: 11px; font-weight: 700; }
+  .checklist-label { flex: 1; font-size: 13px; }
+  .checklist-hint { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .legend-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .legend-chip { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .header-actions { display: flex; gap: 8px; }
+
+  .welcome { max-width: 600px; margin: 50px auto; text-align: center; padding: 0 20px; }
+  .welcome h2 { font-size: 22px; font-weight: 500; margin-bottom: 8px; }
+  .welcome p { color: var(--text2); margin-bottom: 24px; line-height: 1.7; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg4); border: 1px solid var(--border2); color: var(--text); padding: 10px 18px; border-radius: var(--radius); font-size: 12px; z-index: 999; opacity: 0; transition: opacity 0.3s; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 900px) {
+    #sidebar { width: 200px; min-width: 200px; }
+    .grid-4, .grid-6 { grid-template-columns: repeat(2, 1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+// QUESTION BANK — 6 heuristic lenses, scored 0/1/2
+// ═══════════════════════════════════════════════════════
+
+const CATEGORIES = [
+  {
+    id: 'clarity', label: 'Clarity', icon: '◐',
+    desc: 'Can a visitor immediately understand what this page wants them to do?',
+    questions: [
+      { id: 'c1', text: 'Can a first-time visitor identify the primary purpose of the page within 5 seconds?', hint: 'Bad: takes scanning/scrolling to figure out intent. Good: intent and primary CTA identifiable in under 5 seconds.', principle: 'Clarity' },
+      { id: 'c2', text: 'Is there one visually dominant primary CTA, not competing with secondary actions of equal weight?', hint: 'Bad: 2+ CTAs same size/color competing for attention. Good: one dominant CTA, secondary actions clearly subordinate.', principle: 'Clarity' },
+      { id: 'c3', text: 'Is the core value proposition and next action visible above the fold on the dominant device (usually mobile)?', hint: 'Bad: must scroll to learn what is being offered. Good: value prop + next action visible without scrolling.', principle: 'Clarity' },
+      { id: 'c4', text: 'Is the headline/copy specific and outcome-led rather than vague or feature-led?', hint: 'Bad: generic claims with no specificity. Good: concrete, specific language tied to a real outcome.', principle: 'Clarity' },
+      { id: 'c5', text: 'Does the page avoid presenting multiple competing primary actions at the same decision point?', hint: 'Bad: 5+ simultaneous options at one decision point. Good: one primary decision per screen.', principle: 'Clarity' },
+    ]
+  },
+  {
+    id: 'trust', label: 'Trust & Credibility', icon: '◆',
+    desc: 'Does the page give a visitor reason to believe this is safe and legitimate to act on?',
+    questions: [
+      { id: 't1', text: 'Is total cost / fees disclosed before the final step (no surprise charges)?', hint: 'Bad: shipping/tax/fees revealed only at final checkout step, or APR/fees buried in fine print. Good: full cost shown before checkout/decision starts.', principle: 'Trust gap' },
+      { id: 't2', text: 'Are recognized security signals (payment logos, security badge, SSL indicator) visible at the point of sensitive data entry?', hint: 'Bad: no payment logos or security badge near payment/sensitive fields. Good: recognized signals visible exactly where sensitive data is entered.', principle: 'Trust gap' },
+      { id: 't3', text: 'Is social proof (reviews, ratings, testimonials, client logos) visible near the price/CTA?', hint: 'Bad: no reviews, or hidden below the fold. Good: review count/rating visible near price or CTA.', principle: 'Absence of social proof at decision point' },
+      { id: 't4', text: 'Is company legitimacy clear (support contact, regulatory/insurance status, About page) before sensitive data is requested?', hint: 'Bad: no visible support channel or credentials. Good: support channel + credentials visible before sensitive data is requested.', principle: 'Trust gap' },
+      { id: 't5', text: 'Are guarantees, refund, or return policy terms clearly visible rather than buried in linked pages?', hint: 'Bad: policy only discoverable via footer link, several clicks away. Good: key terms surfaced at the relevant decision point.', principle: 'Trust gap' },
+    ]
+  },
+  {
+    id: 'forms', label: 'Forms & Friction', icon: '▭',
+    desc: 'Is every required input justified, and does the form behave predictably?',
+    questions: [
+      { id: 'f1', text: 'Does every field on the form appear necessary, with optional fields clearly marked?', hint: 'Bad: 15+ fields, optional/required mixed with no clear necessity. Good: every field justified, optional fields explicitly marked, unnecessary fields removed.', principle: 'Friction in conversion path' },
+      { id: 'f2', text: 'Is validation inline/real-time rather than only shown after full submission?', hint: 'Bad: errors only appear after submitting the whole form. Good: inline, real-time validation next to the specific field.', principle: 'Friction in conversion path' },
+      { id: 'f3', text: 'Are error messages specific and actionable rather than generic?', hint: 'Bad: "Invalid input." Good: "Card number must be 16 digits."', principle: 'Friction in conversion path' },
+      { id: 'f4', text: 'Does autofill work correctly for name/address/card/OTP fields on mobile?', hint: 'Bad: autofill broken or not triggering on iOS/Android. Good: autofill works correctly across both platforms.', principle: 'Friction in conversion path' },
+      { id: 'f5', text: 'Is the total field count reasonable for this stage of the funnel (not excessive this early)?', hint: 'Bad: asking for everything up front before the user has committed. Good: minimal fields early, more detail requested only once intent is established.', principle: 'Wrong timing of commitment ask' },
+    ]
+  },
+  {
+    id: 'anxiety', label: 'Anxiety Points', icon: '◬',
+    desc: 'Does anything in the flow make a visitor stop and worry about what happens next?',
+    questions: [
+      { id: 'a1', text: 'Are all costs/fees visible at least one step before the final confirmation?', hint: 'Bad: fee appears for the first time at the final step. Good: all costs visible at least one step earlier.', principle: 'Anxiety / surprise cost' },
+      { id: 'a2', text: 'Does a multi-step flow show clear progress (e.g. "Step 2 of 4")?', hint: 'Bad: no step indicator on a multi-step checkout/application. Good: clear progress indicator at every step.', principle: 'Anxiety / lack of orientation' },
+      { id: 'a3', text: 'After submission, is the next step and expected timeframe clearly communicated?', hint: 'Bad: no indication of what happens after submitting (esp. fintech applications). Good: immediate confirmation of next steps + timeframe.', principle: 'Anxiety / post-action uncertainty' },
+      { id: 'a4', text: 'Are security/privacy reassurances present near sensitive-data fields?', hint: 'Bad: sensitive fields (SSN, card, ID upload) with no nearby reassurance. Good: brief reassurance copy at the exact point of sensitive input.', principle: 'Anxiety / trust gap' },
+      { id: 'a5', text: 'Is there a visible way to get help if something goes wrong mid-flow?', hint: 'Bad: no support/chat/contact option visible during the flow. Good: visible help option at every major step.', principle: 'Anxiety / no escape valve' },
+    ]
+  },
+  {
+    id: 'cognitive', label: 'Cognitive Load', icon: '▣',
+    desc: 'Is the visitor being asked to process and decide more than necessary at once?',
+    questions: [
+      { id: 'g1', text: 'Is there only one primary decision per screen, with secondary decisions deferred or pre-selected?', hint: 'Bad: 5+ simultaneous decisions on one screen. Good: one primary decision per screen; secondary decisions deferred with sensible defaults.', principle: 'Cognitive load' },
+      { id: 'g2', text: 'Is copy short and scannable, with longer explanations tucked behind tooltips/"learn more"?', hint: 'Bad: dense paragraphs of legal/explanatory text inline in the main flow. Good: short scannable copy, detail available on demand.', principle: 'Cognitive load' },
+      { id: 'g3', text: 'Are choices/options limited to a manageable number rather than overwhelming?', hint: 'Bad: long unfiltered list of options with no guidance. Good: curated, manageable set of options, with defaults or recommendations.', principle: 'Cognitive load' },
+      { id: 'g4', text: 'Is visual hierarchy used to draw attention to what matters most on the screen?', hint: 'Bad: everything on the screen has equal visual weight. Good: clear hierarchy guiding the eye to the next action.', principle: 'Cognitive load' },
+      { id: 'g5', text: 'Are navigation/menu options minimized during the conversion flow to reduce distraction?', hint: 'Bad: full site nav, promos, and unrelated links present inside checkout/application flow. Good: distraction-free flow once the user has committed to converting.', principle: 'Cognitive load' },
+    ]
+  },
+  {
+    id: 'consistency', label: 'Consistency', icon: '▤',
+    desc: 'Does the experience feel like one coherent product from entry to confirmation?',
+    questions: [
+      { id: 'cs1', text: 'Does branding/styling stay consistent through any third-party handoff (payment processor, KYC vendor)?', hint: 'Bad: product suddenly looks/feels different after handoff. Good: consistent branding maintained, or a clear visual transition cue.', principle: 'Consistency' },
+      { id: 'cs2', text: 'Is the same terminology used for the same action across every screen (e.g. always "Continue")?', hint: 'Bad: "Continue," "Next," "Proceed," "Submit" used inconsistently for the same action. Good: one consistent label throughout.', principle: 'Consistency' },
+      { id: 'cs3', text: 'Do button styles, colors, and placement stay consistent across the funnel?', hint: 'Bad: primary CTA style/position changes between steps with no reason. Good: consistent button treatment throughout the funnel.', principle: 'Consistency' },
+      { id: 'cs4', text: 'Is the visual design consistent across devices (no broken/inconsistent layout on mobile vs desktop)?', hint: 'Bad: elements overlap, misalign, or are missing on mobile. Good: layout adapts cleanly with no breakage across devices.', principle: 'Consistency' },
+      { id: 'cs5', text: 'Does the page tone/voice stay consistent with the rest of the site?', hint: 'Bad: sudden shift in tone (e.g. playful homepage, sterile/legalistic checkout). Good: consistent voice end to end.', principle: 'Consistency' },
+    ]
+  },
+];
+
+const SCORE_LABELS = ['Bad', 'Partial', 'Good'];
+
+const SETUP_ITEMS = [
+  { id: 'incognito', label: 'Session cleared — reviewing logged out, incognito, no autofill data', hint: 'Replicates a true first-time visitor.' },
+  { id: 'devices', label: 'Device/browser matrix defined (min. desktop Chrome, mobile Safari, mobile Chrome)', hint: 'Add others only if analytics show meaningful traffic share.' },
+  { id: 'traffic', label: 'Traffic data pulled — device split, browser split, top landing pages', hint: 'Weight review time toward where the actual traffic is.' },
+  { id: 'entry', label: 'Real entry points identified (top 3-5 actual landing pages, not just homepage)', hint: 'Ad pages, category pages, organic PDPs.' },
+  { id: 'completed', label: 'Full funnel physically completed at least once per device', hint: 'Real form submission / real test purchase or application to the confirmation screen — not just observed.' },
+];
+
+const FUNNEL_PRESETS = {
+  ecommerce: ['Landing', 'Category / PLP', 'Product page (PDP)', 'Cart', 'Checkout — shipping', 'Checkout — payment', 'Confirmation'],
+  fintech: ['Landing', 'Signup / Application', 'Identity verification (KYC)', 'Funding / Activation', 'Confirmation'],
+};
+
+// ═══════════════════════════════════════════════════════
+// STATE (in-memory — use Save/Load Progress to persist across sessions)
+// ═══════════════════════════════════════════════════════
+
+function getDefaultState() {
+  const scores = {};
+  CATEGORIES.forEach(cat => {
+    scores[cat.id] = {};
+    cat.questions.forEach(q => { scores[cat.id][q.id] = { score: null, note: '' }; });
+  });
+  return {
+    client: { site: '', url: '', auditor: '', date: new Date().toISOString().split('T')[0], device: 'Desktop Chrome + Mobile Safari + Mobile Chrome', funnelType: 'ecommerce' },
+    setup: { incognito: false, devices: false, traffic: false, entry: false, completed: false },
+    walkthrough: FUNNEL_PRESETS.ecommerce.map(stage => ({ stage, expected: '', uncertain: '', hesitation: '' })),
+    scores,
+    findings: [],
+    nextFindingNum: 1,
+  };
+}
+
+let state = getDefaultState();
+let currentPage = 'overview';
+let openFindingId = null;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ═══════════════════════════════════════════════════════
+// SCORE / STATS HELPERS
+// ═══════════════════════════════════════════════════════
+
+function categoryScore(catId) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  let sum = 0, answered = 0;
+  cat.questions.forEach(q => {
+    const s = state.scores[catId][q.id].score;
+    if (s !== null) { sum += s; answered++; }
+  });
+  return { sum, max: cat.questions.length * 2, answered, total: cat.questions.length };
+}
+
+function overallScore() {
+  let sum = 0, max = 0, answered = 0, total = 0;
+  CATEGORIES.forEach(cat => {
+    const r = categoryScore(cat.id);
+    sum += r.sum; max += r.max; answered += r.answered; total += r.total;
+  });
+  return { sum, max, answered, total, pct: max ? Math.round((sum / max) * 100) : 0 };
+}
+
+function scoreColor(pct) {
+  if (pct >= 75) return 'var(--success)';
+  if (pct >= 50) return 'var(--med)';
+  if (pct >= 30) return 'var(--high)';
+  return 'var(--critical)';
+}
+
+function severityCounts() {
+  const c = { High: 0, Medium: 0, Low: 0 };
+  state.findings.forEach(f => { if (c[f.severity] !== undefined) c[f.severity]++; });
+  return c;
+}
+
+function setupCompleteCount() {
+  return SETUP_ITEMS.filter(i => state.setup[i.id]).length;
+}
+
+// ═══════════════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════════════
+
+function setClientField(field, value) {
+  state.client[field] = value;
+  if (field === 'funnelType') {
+    state.walkthrough = FUNNEL_PRESETS[value].map(stage => ({ stage, expected: '', uncertain: '', hesitation: '' }));
+    render();
+    return;
+  }
+}
+
+function toggleSetup(id) {
+  state.setup[id] = !state.setup[id];
+  render();
+}
+
+function setWalkField(idx, field, value) { state.walkthrough[idx][field] = value; }
+function addWalkRow() { state.walkthrough.push({ stage: '', expected: '', uncertain: '', hesitation: '' }); render(); }
+function removeWalkRow(idx) { state.walkthrough.splice(idx, 1); render(); }
+
+function setScore(catId, qId, value) {
+  state.scores[catId][qId].score = value;
+  render();
+}
+function setNote(catId, qId, value) { state.scores[catId][qId].note = value; }
+
+function addFindingFromQuestion(catId, qId) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  const q = cat.questions.find(x => x.id === qId);
+  const entry = state.scores[catId][qId];
+  const severity = entry.score === 0 ? 'High' : 'Medium';
+  state.findings.push({
+    id: 'F' + String(state.nextFindingNum++).padStart(2, '0'),
+    stage: '', category: cat.label, principle: q.principle,
+    observation: q.text + (entry.note ? ' — ' + entry.note : ''),
+    severity, evidence: entry.note || '',
+  });
+  showToast('Finding added from ' + cat.label);
+  navigate('findings');
+}
+
+function autoGenerateFindings() {
+  let added = 0;
+  CATEGORIES.forEach(cat => {
+    cat.questions.forEach(q => {
+      const entry = state.scores[cat.id][q.id];
+      if (entry.score !== null && entry.score < 2) {
+        const exists = state.findings.some(f => f.observation.indexOf(q.text) === 0);
+        if (!exists) {
+          state.findings.push({
+            id: 'F' + String(state.nextFindingNum++).padStart(2, '0'),
+            stage: '', category: cat.label, principle: q.principle,
+            observation: q.text + (entry.note ? ' — ' + entry.note : ''),
+            severity: entry.score === 0 ? 'High' : 'Medium',
+            evidence: entry.note || '',
+          });
+          added++;
+        }
+      }
+    });
+  });
+  showToast(added ? `${added} draft finding(s) generated` : 'No new findings — all scored items already covered');
+  render();
+}
+
+function addManualFinding() {
+  state.findings.push({
+    id: 'F' + String(state.nextFindingNum++).padStart(2, '0'),
+    stage: '', category: '', principle: '', observation: '', severity: 'Medium', evidence: '',
+  });
+  openFindingId = state.findings[state.findings.length - 1].id;
+  render();
+}
+
+function setFindingField(id, field, value) {
+  const f = state.findings.find(x => x.id === id);
+  if (f) f[field] = value;
+}
+
+function removeFinding(id) {
+  state.findings = state.findings.filter(f => f.id !== id);
+  render();
+}
+
+function toggleFinding(id) {
+  openFindingId = openFindingId === id ? null : id;
+  render();
+}
+
+function saveProgress() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `heuristic-audit-${(state.client.site || 'draft').replace(/\s+/g, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Progress saved as JSON');
+}
+
+function loadProgress(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const loaded = JSON.parse(e.target.result);
+      state = loaded;
+      showToast('Progress loaded');
+      render();
+    } catch (err) {
+      showToast('Could not read file — invalid JSON');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: OVERVIEW
+// ═══════════════════════════════════════════════════════
+
+function renderOverview() {
+  const o = overallScore();
+  const sev = severityCounts();
+  const setupDone = setupCompleteCount();
+
+  let catBars = CATEGORIES.map(cat => {
+    const r = categoryScore(cat.id);
+    const pct = r.max ? Math.round((r.sum / r.max) * 100) : 0;
+    return `<div class="cat-bar-row">
+      <div class="cat-bar-label">${cat.icon} ${cat.label}</div>
+      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%; background:${scoreColor(pct)}"></div></div>
+      <div class="cat-bar-val">${r.sum}/${r.max}</div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="header-row">
+      <div><h1>Frontend Heuristic Audit</h1><p>Diagnosis-only review of front-end conversion friction, trust, and usability</p></div>
+      <div class="header-actions">
+        <button class="btn btn-ghost" onclick="saveProgress()">⬇ Save progress</button>
+        <label class="btn btn-ghost" style="cursor:pointer;">⬆ Load progress<input type="file" accept="application/json" style="display:none" onchange="loadProgress(this)"></label>
+        <button class="btn btn-primary" onclick="exportPDF()">📄 Export PDF</button>
+      </div>
+    </div>
+  </div>
+  <div class="page-content">
+
+    <div class="card">
+      <div class="card-title">Site under review</div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Site / Brand name</label><input type="text" value="${state.client.site}" oninput="setClientField('site', this.value)"></div>
+        <div class="form-group"><label class="form-label">URL</label><input type="url" value="${state.client.url}" oninput="setClientField('url', this.value)" placeholder="https://"></div>
+        <div class="form-group"><label class="form-label">Auditor</label><input type="text" value="${state.client.auditor}" oninput="setClientField('auditor', this.value)"></div>
+        <div class="form-group"><label class="form-label">Date</label><input type="date" value="${state.client.date}" oninput="setClientField('date', this.value)"></div>
+        <div class="form-group"><label class="form-label">Funnel type</label>
+          <select onchange="setClientField('funnelType', this.value)">
+            <option value="ecommerce" ${state.client.funnelType === 'ecommerce' ? 'selected' : ''}>Ecommerce</option>
+            <option value="fintech" ${state.client.funnelType === 'fintech' ? 'selected' : ''}>Fintech</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Devices/browsers reviewed</label><input type="text" value="${state.client.device}" oninput="setClientField('device', this.value)"></div>
+      </div>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:16px;">
+      <div class="stat-card">
+        <div class="stat-label">Overall Score</div>
+        <div class="stat-value" style="color:${scoreColor(o.pct)}">${o.sum}/${o.max}</div>
+        <div class="stat-sub">${o.pct}% · ${o.answered}/${o.total} questions scored</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">High Severity Findings</div>
+        <div class="stat-value red">${sev.High}</div>
+        <div class="stat-sub">Logged in Findings tab</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Medium Severity Findings</div>
+        <div class="stat-value yellow">${sev.Medium}</div>
+        <div class="stat-sub">Logged in Findings tab</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pre-Review Setup</div>
+        <div class="stat-value ${setupDone === SETUP_ITEMS.length ? 'green' : 'orange'}">${setupDone}/${SETUP_ITEMS.length}</div>
+        <div class="stat-sub">Checklist completion</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Score by heuristic lens</div>
+      <div class="card-sub">0 = Bad · 1 = Partial · 2 = Good, per question. Read these as directional flags, not universal pass/fail gates — a fintech KYC flow legitimately needs more friction than an ecommerce checkout.</div>
+      ${catBars}
+    </div>
+
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: SETUP
+// ═══════════════════════════════════════════════════════
+
+function renderSetup() {
+  const rows = SETUP_ITEMS.map(item => `
+    <div class="checklist-row">
+      <div class="check-box ${state.setup[item.id] ? 'done' : ''}" onclick="toggleSetup('${item.id}')">${state.setup[item.id] ? '✓' : ''}</div>
+      <div style="flex:1;">
+        <div class="checklist-label">${item.label}</div>
+        <div class="checklist-hint">${item.hint}</div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div><h1>Pre-Review Setup</h1><p>Complete before scoring any heuristic lens — replicates a real first-time visitor and ensures review time matches actual traffic.</p></div>
+  </div>
+  <div class="page-content">
+    <div class="card">
+      <div class="card-title">Setup checklist</div>
+      ${rows}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: WALKTHROUGH
+// ═══════════════════════════════════════════════════════
+
+function renderWalkthrough() {
+  const rows = state.walkthrough.map((w, idx) => `
+    <div class="walk-row">
+      <div class="walk-row-head">
+        <input type="text" style="font-weight:600; max-width:260px;" value="${w.stage}" oninput="setWalkField(${idx},'stage',this.value)" placeholder="Funnel stage name">
+        <button class="btn btn-ghost btn-sm" onclick="removeWalkRow(${idx})">Remove</button>
+      </div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">What am I expected to do here?</label><textarea oninput="setWalkField(${idx},'expected',this.value)">${w.expected}</textarea></div>
+        <div class="form-group"><label class="form-label">What am I uncertain about?</label><textarea oninput="setWalkField(${idx},'uncertain',this.value)">${w.uncertain}</textarea></div>
+        <div class="form-group"><label class="form-label">What would make me hesitate or abandon?</label><textarea oninput="setWalkField(${idx},'hesitation',this.value)">${w.hesitation}</textarea></div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div><h1>Funnel Walkthrough</h1><p>Physically complete the flow per device. Log these three prompts at every stage before moving on.</p></div>
+  </div>
+  <div class="page-content">
+    ${rows}
+    <button class="btn btn-ghost" onclick="addWalkRow()">+ Add stage</button>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: CATEGORY (clarity/trust/forms/anxiety/cognitive/consistency)
+// ═══════════════════════════════════════════════════════
+
+function renderCategory(catId) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  const r = categoryScore(catId);
+  const pct = r.max ? Math.round((r.sum / r.max) * 100) : 0;
+
+  const rows = cat.questions.map(q => {
+    const entry = state.scores[catId][q.id];
+    const btns = [0, 1, 2].map(v => `<button class="score-btn ${entry.score === v ? 'selected-' + v : ''}" onclick="setScore('${catId}','${q.id}',${v})">${SCORE_LABELS[v]}</button>`).join('');
+    return `
+      <div class="score-row">
+        <div style="flex:1;">
+          <div class="score-question">${q.text}</div>
+          <div class="score-hint">${q.hint}</div>
+          <span class="score-principle">${q.principle}</span>
+          <div class="evidence-input">
+            <textarea placeholder="Evidence / notes (what you observed, where, screenshot reference)..." oninput="setNote('${catId}','${q.id}',this.value)">${entry.note}</textarea>
+          </div>
+          ${entry.score !== null && entry.score < 2 ? `<button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="addFindingFromQuestion('${catId}','${q.id}')">+ Add as finding</button>` : ''}
+        </div>
+        <div class="score-buttons">${btns}</div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div><h1>${cat.icon} ${cat.label}</h1><p>${cat.desc}</p></div>
+  </div>
+  <div class="page-content">
+    <div class="card">
+      <div class="header-row" style="margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0;">Score: ${r.sum}/${r.max} (${pct}%)</div>
+        <div class="card-sub" style="margin-bottom:0;">${r.answered}/${r.total} scored</div>
+      </div>
+      <div class="legend-row">
+        <span class="legend-chip"><span class="legend-dot" style="background:var(--critical)"></span>Bad = 0</span>
+        <span class="legend-chip"><span class="legend-dot" style="background:var(--med)"></span>Partial = 1</span>
+        <span class="legend-chip"><span class="legend-dot" style="background:var(--success)"></span>Good = 2</span>
+      </div>
+      ${rows}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER: FINDINGS
+// ═══════════════════════════════════════════════════════
+
+function renderFindings() {
+  const sev = severityCounts();
+  const items = state.findings.map((f, idx) => {
+    const open = openFindingId === f.id;
+    const badgeClass = f.severity === 'High' ? 'badge-high' : f.severity === 'Low' ? 'badge-low' : 'badge-medium';
+    return `
+    <div class="finding-card">
+      <div class="finding-header" onclick="toggleFinding('${f.id}')">
+        <span class="finding-num">${f.id}</span>
+        <span class="finding-title">${f.observation ? f.observation.slice(0, 70) + (f.observation.length > 70 ? '…' : '') : '(empty finding — click to edit)'}</span>
+        <span class="finding-meta"><span class="badge ${badgeClass}">${f.severity}</span>${f.category || ''}</span>
+      </div>
+      <div class="finding-body ${open ? 'open' : ''}">
+        <div class="grid-3">
+          <div class="finding-field"><label>Funnel stage</label><input type="text" value="${f.stage}" oninput="setFindingField('${f.id}','stage',this.value)" placeholder="e.g. Checkout — payment step"></div>
+          <div class="finding-field"><label>Category / lens</label><input type="text" value="${f.category}" oninput="setFindingField('${f.id}','category',this.value)" placeholder="e.g. Trust & Credibility"></div>
+          <div class="finding-field"><label>Severity</label>
+            <select onchange="setFindingField('${f.id}','severity',this.value)">
+              <option ${f.severity === 'High' ? 'selected' : ''}>High</option>
+              <option ${f.severity === 'Medium' ? 'selected' : ''}>Medium</option>
+              <option ${f.severity === 'Low' ? 'selected' : ''}>Low</option>
+            </select>
+          </div>
+        </div>
+        <div class="finding-field"><label>Principle violated</label><input type="text" value="${f.principle}" oninput="setFindingField('${f.id}','principle',this.value)" placeholder="e.g. Friction in conversion path"></div>
+        <div class="finding-field"><label>Observation</label><textarea oninput="setFindingField('${f.id}','observation',this.value)">${f.observation}</textarea></div>
+        <div class="finding-field"><label>Evidence (screenshot reference / notes)</label><textarea oninput="setFindingField('${f.id}','evidence',this.value)">${f.evidence}</textarea></div>
+        <button class="btn btn-danger btn-sm" onclick="removeFinding('${f.id}')">Remove finding</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="header-row">
+      <div><h1>Findings</h1><p>Diagnosis only — no fixes prescribed here. ${sev.High} High · ${sev.Medium} Medium · ${sev.Low} Low</p></div>
+      <div class="header-actions">
+        <button class="btn btn-ghost" onclick="autoGenerateFindings()">⚡ Auto-generate from scores</button>
+        <button class="btn btn-primary" onclick="addManualFinding()">+ Add finding</button>
+      </div>
+    </div>
+  </div>
+  <div class="page-content">
+    ${items || '<div class="card"><div class="card-sub">No findings yet. Score the heuristic lenses and use "Auto-generate from scores," or add one manually.</div></div>'}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// PDF EXPORT
+// ═══════════════════════════════════════════════════════
+
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const PW = 210, ML = 16, MR = 16, CW = PW - ML - MR, BOTTOM = 282;
+  let y = 18;
+
+  const COL = {
+    accent: [91, 111, 255], text: [30, 30, 38], muted: [120, 120, 135],
+    border: [225, 225, 232], bgLight: [245, 246, 250], white: [255, 255, 255],
+    critical: [220, 38, 38], high: [200, 110, 0], med: [180, 140, 0], success: [22, 130, 70],
+  };
+
+  function setFont(size, weight, color) {
+    doc.setFontSize(size);
+    doc.setFont('helvetica', weight);
+    doc.setTextColor(...color);
+  }
+  function checkPage(needed = 10) {
+    if (y + needed > BOTTOM) { doc.addPage(); y = 18; drawPageHeader(); }
+  }
+  function drawPageHeader() {
+    doc.setFillColor(...COL.accent);
+    doc.rect(0, 0, PW, 8, 'F');
+    setFont(7, 'normal', COL.white);
+    doc.text(`Frontend Heuristic Audit — ${state.client.site || 'Site'}`, ML, 5.5);
+    doc.text(`Generated ${new Date().toLocaleDateString()}`, PW - MR, 5.5, { align: 'right' });
+  }
+  function sectionHeading(label) {
+    checkPage(14); y += 6;
+    doc.setFillColor(...COL.bgLight); doc.setDrawColor(...COL.border);
+    doc.roundedRect(ML, y, CW, 9, 2, 2, 'FD');
+    setFont(10, 'bold', COL.accent);
+    doc.text(label, ML + 4, y + 6.2);
+    y += 13;
+  }
+  function bodyText(text, indent = 0, color = COL.text) {
+    setFont(8, 'normal', color);
+    const lines = doc.splitTextToSize(text || '—', CW - indent);
+    lines.forEach(line => { checkPage(5); doc.text(line, ML + indent, y); y += 4.5; });
+  }
+  function labelText(label, value, indent = 0) {
+    setFont(7, 'bold', COL.muted);
+    doc.text(label.toUpperCase(), ML + indent, y); y += 4;
+    bodyText(value, indent);
+  }
+  function hRule(color = COL.border) {
+    doc.setDrawColor(...color); doc.line(ML, y, ML + CW, y); y += 3;
+  }
+  function severityColor(sev) {
+    return sev === 'High' ? COL.critical : sev === 'Low' ? COL.success : COL.med;
+  }
+
+  const o = overallScore();
+  const sev = severityCounts();
+
+  // ── COVER ──
+  doc.setFillColor(...COL.accent);
+  doc.rect(0, 0, PW, 58, 'F');
+  setFont(11, 'bold', COL.white);
+  doc.text('FRONTEND HEURISTIC AUDIT', ML, 20);
+  setFont(8, 'normal', [200, 208, 255]);
+  doc.text('Diagnosis-only review of front-end conversion friction, trust, and usability', ML, 26);
+  setFont(20, 'bold', COL.white);
+  doc.text(state.client.site || 'Site Name', ML, 44);
+
+  y = 66;
+  setFont(8, 'normal', COL.muted);
+  doc.text(`${state.client.url || ''}  ·  ${state.client.funnelType === 'fintech' ? 'Fintech' : 'Ecommerce'}  ·  Auditor: ${state.client.auditor || '—'}  ·  Date: ${state.client.date || '—'}`, ML, y);
+  y += 4;
+  doc.text(`Devices reviewed: ${state.client.device || '—'}`, ML, y);
+  y += 10;
+
+  const stats = [
+    { label: 'Overall Score', value: `${o.sum}/${o.max}`, color: o.pct >= 60 ? COL.success : COL.critical },
+    { label: 'Score %', value: `${o.pct}%`, color: COL.accent },
+    { label: 'High Findings', value: `${sev.High}`, color: COL.critical },
+    { label: 'Medium Findings', value: `${sev.Medium}`, color: COL.med },
+    { label: 'Total Findings', value: `${state.findings.length}`, color: COL.accent },
+  ];
+  const boxW = (CW - 8) / stats.length;
+  stats.forEach((s, i) => {
+    const bx = ML + i * (boxW + 2);
+    doc.setFillColor(...COL.bgLight); doc.setDrawColor(...COL.border);
+    doc.roundedRect(bx, y, boxW, 22, 2, 2, 'FD');
+    setFont(6.5, 'normal', COL.muted);
+    doc.text(s.label.toUpperCase(), bx + boxW / 2, y + 6, { align: 'center' });
+    doc.setTextColor(...s.color); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+    doc.text(s.value, bx + boxW / 2, y + 16, { align: 'center' });
+  });
+  y += 28;
+  hRule();
+  setFont(9, 'bold', COL.text);
+  doc.text('Contents', ML, y); y += 6;
+  ['1 · Pre-Review Setup', '2 · Score by Heuristic Lens', '3 · Funnel Walkthrough Notes', '4 · All Findings (' + state.findings.length + ')'].forEach(item => {
+    setFont(8, 'normal', COL.muted);
+    doc.text('—  ' + item, ML + 4, y); y += 5;
+  });
+  y += 4; hRule();
+  setFont(7, 'normal', COL.muted);
+  doc.text(`Generated by Frontend Heuristic Audit Tool · ${new Date().toLocaleDateString()} · ${state.client.auditor || ''}`, ML, BOTTOM);
+
+  // ── SECTION 1: SETUP ──
+  doc.addPage(); y = 18; drawPageHeader();
+  sectionHeading('1 · Pre-Review Setup');
+  const setupRows = SETUP_ITEMS.map(i => [i.label, state.setup[i.id] ? 'Done' : 'Not done']);
+  doc.autoTable({
+    startY: y, head: [['Checklist item', 'Status']], body: setupRows,
+    margin: { left: ML, right: MR }, styles: { fontSize: 8, cellPadding: 3, textColor: COL.text },
+    headStyles: { fillColor: COL.accent, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+    alternateRowStyles: { fillColor: COL.bgLight },
+    columnStyles: { 0: { cellWidth: CW - 30 } },
+    didDrawPage: () => { drawPageHeader(); }
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // ── SECTION 2: SCORES ──
+  sectionHeading('2 · Score by Heuristic Lens');
+  const scoreRows = CATEGORIES.map(cat => {
+    const r = categoryScore(cat.id);
+    const pct = r.max ? Math.round((r.sum / r.max) * 100) : 0;
+    return [cat.label, `${r.sum}/${r.max}`, `${pct}%`, `${r.answered}/${r.total}`];
+  });
+  doc.autoTable({
+    startY: y, head: [['Lens', 'Score', '%', 'Questions scored']], body: scoreRows,
+    margin: { left: ML, right: MR }, styles: { fontSize: 8, cellPadding: 3, textColor: COL.text },
+    headStyles: { fillColor: COL.accent, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+    alternateRowStyles: { fillColor: COL.bgLight },
+    didDrawPage: () => { drawPageHeader(); }
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  checkPage(10);
+  setFont(7.5, 'normal', COL.muted);
+  doc.text('Read these as directional flags, not universal pass/fail gates — a fintech KYC flow legitimately needs more friction than an ecommerce checkout.', ML, y);
+  y += 8;
+
+  // ── SECTION 3: WALKTHROUGH ──
+  sectionHeading('3 · Funnel Walkthrough Notes');
+  state.walkthrough.forEach(w => {
+    if (!w.stage && !w.expected && !w.uncertain && !w.hesitation) return;
+    checkPage(28);
+    setFont(9, 'bold', COL.text);
+    doc.text(w.stage || 'Stage', ML, y); y += 5;
+    labelText('Expected action', w.expected, 3); y += 1;
+    labelText('Uncertainty observed', w.uncertain, 3); y += 1;
+    labelText('Hesitation/abandon risk', w.hesitation, 3); y += 3;
+    hRule();
+  });
+
+  // ── SECTION 4: FINDINGS ──
+  sectionHeading('4 · All Findings');
+  if (state.findings.length === 0) {
+    bodyText('No findings logged.');
+  }
+  state.findings.forEach((f, idx) => {
+    checkPage(55);
+    const cardY = y;
+    doc.setFillColor(230, 232, 250); doc.roundedRect(ML, cardY, CW, 10, 2, 2, 'FD');
+    setFont(8, 'bold', COL.muted);
+    doc.text(f.id, ML + 3, cardY + 6.5);
+    setFont(9, 'bold', COL.text);
+    doc.text(doc.splitTextToSize(f.category || 'Finding', CW - 60)[0], ML + 16, cardY + 6.5);
+    const sc = severityColor(f.severity);
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...sc);
+    doc.roundedRect(ML + CW - 44, cardY + 2, 26, 6, 1, 1, 'FD');
+    doc.setTextColor(...sc); doc.setFontSize(6.5); doc.setFont('helvetica', 'bold');
+    doc.text((f.severity || '').toUpperCase(), ML + CW - 31, cardY + 6, { align: 'center' });
+    setFont(7, 'normal', COL.muted);
+    doc.text(f.stage || '', ML + CW - 16, cardY + 6.5, { align: 'right' });
+    y = cardY + 13;
+    labelText('Principle violated', f.principle, 3); y += 1;
+    labelText('Observation', f.observation, 3); y += 1;
+    labelText('Evidence', f.evidence, 3);
+    y += 4;
+    if (idx < state.findings.length - 1) hRule();
+  });
+
+  checkPage(8);
+  hRule();
+  setFont(7, 'normal', COL.muted);
+  doc.text(`Generated by Frontend Heuristic Audit Tool · ${new Date().toLocaleDateString()} · ${state.client.auditor || ''}`, ML, y);
+
+  const filename = `Heuristic-Audit-${(state.client.site || 'Report').replace(/\s+/g, '-')}-${state.client.date || new Date().toISOString().slice(0, 10)}.pdf`;
+  doc.save(filename);
+  showToast('PDF exported');
+}
+
+// ═══════════════════════════════════════════════════════
+// NAV / RENDER
+// ═══════════════════════════════════════════════════════
+
+function navigate(page) { currentPage = page; render(); }
+
+const NAV_ITEMS = [
+  { id: 'overview', label: 'Overview', icon: '◉' },
+  { id: '', label: 'PRE-REVIEW', type: 'section' },
+  { id: 'setup', label: 'Setup checklist', icon: '☑', badge: () => { const n = setupCompleteCount(); return { text: n + '/' + SETUP_ITEMS.length, type: n === SETUP_ITEMS.length ? 'good' : 'warn' }; } },
+  { id: 'walkthrough', label: 'Funnel walkthrough', icon: '➜' },
+  { id: '', label: 'HEURISTIC LENSES', type: 'section' },
+  ...CATEGORIES.map(cat => ({
+    id: cat.id, label: cat.label, icon: cat.icon,
+    badge: () => { const r = categoryScore(cat.id); const pct = r.max ? Math.round((r.sum / r.max) * 100) : 0; return r.answered === 0 ? null : { text: pct + '%', type: pct >= 75 ? 'good' : pct >= 40 ? 'warn' : 'danger' }; }
+  })),
+  { id: '', label: 'OUTPUT', type: 'section' },
+  { id: 'findings', label: 'Findings', icon: '📌', badge: () => { const s = severityCounts(); return s.High > 0 ? { text: s.High + 'H', type: 'danger' } : (state.findings.length ? { text: state.findings.length, type: 'warn' } : null); } },
+];
+
+function render() {
+  const app = document.getElementById('app');
+  const renderers = { overview: renderOverview, setup: renderSetup, walkthrough: renderWalkthrough, findings: renderFindings };
+  CATEGORIES.forEach(cat => { renderers[cat.id] = () => renderCategory(cat.id); });
+  const renderer = renderers[currentPage] || renderOverview;
+
+  const navHtml = NAV_ITEMS.map(item => {
+    if (item.type === 'section') return `<div class="sidebar-section-label">${item.label}</div>`;
+    const badge = item.badge ? item.badge() : null;
+    return `<button class="nav-item ${currentPage === item.id ? 'active' : ''}" onclick="navigate('${item.id}')">
+      <span class="nav-icon">${item.icon}</span>${item.label}
+      ${badge ? `<span class="nav-badge ${badge.type}">${badge.text}</span>` : ''}
+    </button>`;
+  }).join('');
+
+  app.innerHTML = `
+    <div id="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo">Heuristic Audit Tool</div>
+        <div class="version">Frontend-only · v1.0</div>
+      </div>
+      ${state.client.site ? `<div class="sidebar-client"><div class="sidebar-client-label">Reviewing</div><div class="sidebar-client-name">${state.client.site}</div></div>` : ''}
+      <nav style="padding:8px 0">${navHtml}</nav>
+    </div>
+    <div id="main">
+      <div class="page-header">${renderer()}</div>
+    </div>`;
+
+  const header = app.querySelector('.page-header');
+  const main = app.querySelector('#main');
+  const content = header.innerHTML;
+  header.remove();
+  const div = document.createElement('div');
+  div.className = 'page-content-wrap';
+  div.innerHTML = content;
+  main.appendChild(div);
+}
+
+render();
+</script>
+</body>
+</html>
